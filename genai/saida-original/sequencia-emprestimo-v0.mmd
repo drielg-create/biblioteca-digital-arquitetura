@@ -1,0 +1,24 @@
+sequenceDiagram
+    actor Reader
+    participant Web as Web App
+    participant GW as API Gateway
+    participant Loan as Loan Service
+    participant Catalog as Catalog Service
+    participant Fine as Fine Service
+    participant Notify as Notification Service
+    participant DB as Database
+
+    Reader->>Web: Request loan
+    Web->>GW: POST /loans
+    GW->>Loan: Forward request
+    Loan->>Fine: Check pending fines
+    Fine-->>Loan: No fines
+    Loan->>Catalog: Check availability
+    Catalog-->>Loan: Available
+    Loan->>DB: Save loan
+    Loan->>Catalog: Update book status
+    Loan->>Notify: Send confirmation
+    Notify-->>Reader: Email confirmation
+    Loan-->>GW: Loan created
+    GW-->>Web: 201 Created
+    Web-->>Reader: Show confirmation

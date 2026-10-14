@@ -1,0 +1,36 @@
+C4Container
+    title Container diagram - Digital Library
+
+    Person(reader, "Reader", "Library user")
+    Person(librarian, "Librarian", "Library staff")
+
+    System_Boundary(lib, "Digital Library") {
+        Container(web, "Web App", "React", "User interface")
+        Container(gateway, "API Gateway", "Kong", "Routes requests")
+        Container(catalog, "Catalog Service", "Node.js", "Manages books")
+        Container(loan, "Loan Service", "Node.js", "Manages loans")
+        Container(fine, "Fine Service", "Node.js", "Manages fines")
+        Container(notify, "Notification Service", "Node.js", "Sends notifications")
+        Container(user, "User Service", "Node.js", "Manages users")
+        ContainerDb(db, "Database", "MongoDB", "Stores all data")
+    }
+
+    System_Ext(email, "Email Provider", "Sends emails")
+    System_Ext(payment, "Payment Gateway", "Processes payments")
+
+    Rel(reader, web, "Uses")
+    Rel(librarian, web, "Uses")
+    Rel(web, gateway, "Calls")
+    Rel(gateway, catalog, "Routes")
+    Rel(gateway, loan, "Routes")
+    Rel(gateway, fine, "Routes")
+    Rel(gateway, user, "Routes")
+    Rel(loan, catalog, "Checks availability")
+    Rel(loan, fine, "Checks fines")
+    Rel(loan, notify, "Sends notification")
+    Rel(catalog, db, "Reads/Writes")
+    Rel(loan, db, "Reads/Writes")
+    Rel(fine, db, "Reads/Writes")
+    Rel(user, db, "Reads/Writes")
+    Rel(notify, email, "Sends")
+    Rel(fine, payment, "Charges")

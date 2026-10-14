@@ -1,0 +1,47 @@
+flowchart TB
+    leitor["Leitor<br/>[Pessoa]<br/>Aluno, servidor ou cidadão cadastrado"]
+    biblio["Bibliotecário<br/>[Pessoa]<br/>Opera balcão, acervo e exceções"]
+
+    subgraph sistema["Biblioteca Digital — fronteira do sistema"]
+        direction TB
+        portal["Portal do Leitor<br/>[Container: SPA React]<br/>Busca, empréstimos, reservas e histórico"]
+        backoffice["Backoffice<br/>[Container: SPA React]<br/>Balcão, acervo e gestão de multas"]
+        api["API da Biblioteca<br/>[Container: monólito modular Java / Spring Boot]<br/>Módulos: Catálogo, Circulação, Multas, Usuários"]
+        worker["Worker de Tarefas<br/>[Container: Spring Boot + agendador]<br/>Lembretes, expiração de reservas, cálculo de multas"]
+        db[("Banco Relacional<br/>[PostgreSQL]<br/>Acervo, exemplares, empréstimos, multas, outbox")]
+        search[("Índice de Busca<br/>[OpenSearch]<br/>Busca textual do catálogo")]
+        fila[["Fila de Eventos<br/>[RabbitMQ]<br/>Eventos de domínio publicados via outbox"]]
+    end
+
+    idp["Provedor de Identidade<br/>[Sistema externo: SSO institucional / OIDC]"]
+    drm["Distribuidora de E-books<br/>[Sistema externo]<br/>Emite licenças com DRM"]
+    pag["Gateway de Pagamento<br/>[Sistema externo: PIX]"]
+    msg["Serviço de E-mail / SMS<br/>[Sistema externo]"]
+    isbn["Base Bibliográfica<br/>[Sistema externo: API ISBN]"]
+
+    leitor -->|"Usa [HTTPS]"| portal
+    biblio -->|"Usa [HTTPS]"| backoffice
+    portal -->|"Autentica [OIDC]"| idp
+    backoffice -->|"Autentica [OIDC]"| idp
+    portal -->|"Chama [JSON/HTTPS]"| api
+    backoffice -->|"Chama [JSON/HTTPS]"| api
+    api -->|"Lê e grava [SQL]"| db
+    api -->|"Consulta e indexa [HTTPS]"| search
+    api -->|"Publica eventos [AMQP]"| fila
+    fila -->|"Entrega eventos [AMQP]"| worker
+    worker -->|"Lê e grava [SQL]"| db
+    api -->|"Solicita e revoga licenças [HTTPS]"| drm
+    api -->|"Gera cobrança de multa [HTTPS]"| pag
+    pag -.->|"Confirma pagamento [webhook HTTPS]"| api
+    api -->|"Importa metadados [HTTPS]"| isbn
+    worker -->|"Envia notificações [HTTPS]"| msg
+
+    classDef pessoa fill:#08427b,stroke:#052e56,color:#fff
+    classDef container fill:#1168bd,stroke:#0b4884,color:#fff
+    classDef dado fill:#438dd5,stroke:#2e6295,color:#fff
+    classDef externo fill:#999999,stroke:#6b6b6b,color:#fff
+    class leitor,biblio pessoa
+    class portal,backoffice,api,worker container
+    class db,search,fila dado
+    class idp,drm,pag,msg,isbn externo
+    style sistema fill:none,stroke:#1168bd,stroke-width:2px,stroke-dasharray:6 4

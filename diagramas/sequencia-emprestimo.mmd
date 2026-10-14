@@ -1,0 +1,48 @@
+sequenceDiagram
+    autonumber
+    actor L as Leitor
+    participant P as Portal do Leitor
+    participant IdP as Provedor de Identidade
+    participant API as API da Biblioteca<br/>(módulo Circulação)
+    participant DB as PostgreSQL
+    participant DRM as Distribuidora de E-books
+    participant F as Fila de Eventos
+    participant W as Worker de Tarefas
+    participant N as E-mail / SMS
+
+    L->>P: Clica em "Emprestar" na página da obra
+    P->>IdP: Renova sessão (OIDC)
+    IdP-->>P: Token de acesso (JWT)
+    P->>API: POST /emprestimos {obraId, formato} + JWT + Idempotency-Key
+    API->>DB: Consulta elegibilidade (multas em aberto, limite de empréstimos, cadastro ativo)
+    DB-->>API: Situação do leitor
+
+    alt Leitor inelegível
+        API-->>P: 422 com motivo (ex.: multa pendente)
+        P-->>L: Exibe motivo e link para pagar a multa
+    else Leitor elegível
+        API->>DB: BEGIN e bloqueia exemplar ou licença livre (FOR UPDATE SKIP LOCKED)
+        alt Nenhum exemplar ou licença livre
+            API->>DB: ROLLBACK
+            API-->>P: 409 Indisponível + previsão da fila
+            P-->>L: Oferece entrar na fila de reserva
+        else Item bloqueado
+            opt Formato e-book
+                API->>DRM: Solicita licença (leitor, ISBN, 14 dias) com timeout de 3 s
+                alt DRM falhou ou excedeu o tempo
+                    API->>DB: ROLLBACK
+                    API-->>P: 503 Tente novamente
+                    P-->>L: Informa falha temporária
+                else Licença emitida
+                    DRM-->>API: Link de download protegido
+                end
+            end
+            API->>DB: INSERT empréstimo + INSERT outbox(EmprestimoRealizado) e COMMIT
+            API-->>P: 201 Empréstimo criado (prazo, link ou retirada em 48 h)
+            P-->>L: Confirmação com data de devolução
+            Note over API,F: Relay do outbox publica o evento somente após o COMMIT
+            API--)F: EmprestimoRealizado
+            F--)W: Entrega evento
+            W->>N: Envia comprovante e agenda lembrete D-2
+        end
+    end
